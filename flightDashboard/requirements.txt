@@ -1,0 +1,9 @@
+streamlit
+pandas
+django
+django-extensions
+python-dateutil
+pytz
+plotly
+django-cors-headers
+django-rest-framework

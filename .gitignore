@@ -1,0 +1,4 @@
+flightDashboard/venv
+__pycache__
+*.pyc
+FlightDashboard-Expo/node_modules
