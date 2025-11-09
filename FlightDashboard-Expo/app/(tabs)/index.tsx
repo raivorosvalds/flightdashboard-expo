@@ -1,118 +1,436 @@
-import React, { useEffect, useState } from 'react'; // Import React and hooks
-import { Image } from 'expo-image';
-import { Platform, StyleSheet } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { View, Text, TouchableOpacity, StyleSheet, ScrollView, Alert, ActivityIndicator } from 'react-native';
+import { Flights, Airlines, Routes, Aircrafts, Airports, fetchFlights, fetchAirlines, fetchRoutes, fetchAircrafts, fetchAirports, createFlight, updateFlight, deleteFlight } from '../../services/api';
+import { FlightForm } from '../../components/FlightForm';
+import { RefreshControl } from 'react-native';
 
-import { HelloWave } from '@/components/hello-wave';
-import ParallaxScrollView from '@/components/parallax-scroll-view';
-import { ThemedText } from '@/components/themed-text';
-import { ThemedView } from '@/components/themed-view';
-import { Link } from 'expo-router';
-import { fetchMyModels } from './api';
+type Operation = 'create' | 'update' | 'delete' | null;
 
-async function getData() {
-  const url = "http://10.7.12.154:8000/airports/";
-  try {
-    const response = await fetch(url);
-    if (!response.ok) {
-      throw new Error(`Response status: ${response.status}`);
+export default function FlightManager() {
+  const [flights, setFlights] = useState<Flights[]>([]);
+  const [airlines, setAirlines] = useState<Airlines[]>([]);
+  const [routes, setRoutes] = useState<Routes[]>([]);
+  const [aircrafts, setAircrafts] = useState<Aircrafts[]>([]);
+  const [airports, setAirports] = useState<Airports[]>([]); 
+  const [selectedOperation, setSelectedOperation] = useState<Operation>(null);
+  const [selectedFlightId, setSelectedFlightId] = useState<number | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+
+  useEffect(() => {
+    loadData();
+  }, []);
+
+  const loadData = async () => {
+    setLoading(true);
+    try {
+      const [flightsData, airlinesData, routesData, aircraftsData] = await Promise.all([
+        fetchFlights(),
+        fetchAirlines(),
+        fetchRoutes(),
+        fetchAircrafts(),
+        fetchAirports()
+      ]);
+      setFlights(flightsData);
+      setAirlines(airlinesData);
+      setRoutes(routesData);
+      setAircrafts(aircraftsData);
+    } catch (error) {
+      Alert.alert('Kļūda', 'Neizdevās ielādēt datus');
+      console.error('Load data error:', error);
+    } finally {
+      setLoading(false);
     }
+  };
 
-    const result = await response.json();
-    console.log(result);
-    return result[25].city;
-  } catch (error) {
-    console.error(error.message);
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    await loadData();
+    setRefreshing(false);
+  };
+
+  const handleCreate = async (flightData: Omit<Flights, 'id'>) => {
+    try {
+      await createFlight(flightData);
+      Alert.alert('Veiksmīgi', 'Lidojums izveidots');
+      setSelectedOperation(null);
+      await loadData();
+    } catch (error) {
+      Alert.alert('Kļūda', 'Neizdevās izveidot lidojumu');
+      console.error('Create flight error:', error);
+    }
+  };
+
+  const handleUpdate = async (flightData: Omit<Flights, 'id'>) => {
+    if (!selectedFlightId) return;
+    try {
+      await updateFlight(selectedFlightId, flightData);
+      Alert.alert('Veiksmīgi', 'Lidojums atjaunināts');
+      setSelectedOperation(null);
+      setSelectedFlightId(null);
+      await loadData();
+    } catch (error) {
+      Alert.alert('Kļūda', 'Neizdevās atjaunināt lidojumu');
+      console.error('Update flight error:', error);
+    }
+  };
+
+const handleDelete = async () => {
+  if (!selectedFlightId) return;
+  
+  if (window.confirm(`Vai tiešām vēlaties dzēst lidojumu ar ID: ${selectedFlightId}?`)) {
+    try {
+      setLoading(true);
+      console.log('Deleting flight ID:', selectedFlightId);
+      
+      await deleteFlight(selectedFlightId);
+      
+      alert('Lidojums veiksmīgi dzēsts!');
+      console.log(' Lidojums veiksmīgi dzēsts!');
+      
+      setSelectedOperation(null);
+      setSelectedFlightId(null);
+      await loadData();
+      
+    } catch (error) {
+      console.error('Delete error:', error);
+      alert(`Kļūda: ${error instanceof Error ? error.message : 'Neizdevās dzēst lidojumu'}`);
+    } finally {
+      setLoading(false);
+    }
+  } else {
+    console.log('Delete cancelled by user');
   }
-}
+};
 
- let result = getData();
+  const getSelectedFlight = () => {
+    return flights.find(flight => flight.id === selectedFlightId);
+  };
 
-export default function HomeScreen() {
+  if (loading) {
+    return (
+      <View style={styles.center}>
+        <ActivityIndicator size="large" color="#007bff" />
+        <Text>Ielādē datus...</Text>
+      </View>
+    );
+  }
+
   return (
-    <ParallaxScrollView
-      headerBackgroundColor={{ light: '#A1CEDC', dark: '#1D3D47' }}
-      headerImage={
-        <Image
-          source={require('@/assets/images/partial-react-logo.png')}
-          style={styles.reactLogo}
-        />
-      }>
-      <ThemedView style={styles.titleContainer}>
-        <ThemedText type="title">Welcome!</ThemedText>
-        <HelloWave />
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <ThemedText type="subtitle">Step 1: Try it {result}</ThemedText>
-        <ThemedText>
-          Edit <ThemedText type="defaultSemiBold">app/(tabs)/index.tsx</ThemedText> to see changes.
-          Press{' '}
-          <ThemedText type="defaultSemiBold">
-            {Platform.select({
-              ios: 'cmd + d',
-              android: 'cmd + m',
-              web: 'F12',
-            })}
-          </ThemedText>{' '}
-          to open developer tools.
-        </ThemedText>
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <Link href="/modal">
-          <Link.Trigger>
-            <ThemedText type="subtitle">Step 2: Explore</ThemedText>
-          </Link.Trigger>
-          <Link.Preview />
-          <Link.Menu>
-            <Link.MenuAction title="Action" icon="cube" onPress={() => alert('Action pressed')} />
-            <Link.MenuAction
-              title="Share"
-              icon="square.and.arrow.up"
-              onPress={() => alert('Share pressed')}
-            />
-            <Link.Menu title="More" icon="ellipsis">
-              <Link.MenuAction
-                title="Delete"
-                icon="trash"
-                destructive
-                onPress={() => alert('Delete pressed')}
-              />
-            </Link.Menu>
-          </Link.Menu>
-        </Link>
+    <ScrollView style={styles.container} refreshControl={
+      <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />
+    }>
+      <Text style={styles.title}>✈️ Lidojumu Pārvalde</Text>
 
-        <ThemedText>
-          {`Tap the Explore tab to learn more about what's included in this starter app.`}
-        </ThemedText>
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <ThemedText type="subtitle">Step 3: Get a fresh start</ThemedText>
-        <ThemedText>
-          {`When you're ready, run `}
-          <ThemedText type="defaultSemiBold">urmom</ThemedText> to get a fresh{' '}
-          <ThemedText type="defaultSemiBold">app</ThemedText> directory. This will move the current{' '}
-          <ThemedText type="defaultSemiBold">app</ThemedText> to{' '}
-          <ThemedText type="defaultSemiBold">app-example</ThemedText>.
-        </ThemedText>
-      </ThemedView>
-    </ParallaxScrollView>
+      {/* Operāciju izvēle */}
+      <View style={styles.operationSection}>
+        <Text style={styles.sectionTitle}>Izvēlieties darbību:</Text>
+        
+        <View style={styles.buttonRow}>
+          <TouchableOpacity 
+            style={[styles.operationButton, selectedOperation === 'create' && styles.activeButton]}
+            onPress={() => setSelectedOperation('create')}
+          >
+            <Text style={[styles.buttonText, selectedOperation === 'create' && styles.activeButtonText]}>
+              ➕ Pievienot
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity 
+            style={[styles.operationButton, selectedOperation === 'update' && styles.activeButton]}
+            onPress={() => setSelectedOperation('update')}
+          >
+            <Text style={[styles.buttonText, selectedOperation === 'update' && styles.activeButtonText]}>
+              ✏️ Rediģēt
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity 
+            style={[styles.operationButton, selectedOperation === 'delete' && styles.activeButton]}
+            onPress={() => setSelectedOperation('delete')}
+          >
+            <Text style={[styles.buttonText, selectedOperation === 'delete' && styles.activeButtonText]}>
+              🗑️ Dzēst
+            </Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+
+      {/* DELETE operācija */}
+      {selectedOperation === 'delete' && (
+        <View style={styles.operationContainer}>
+          <Text style={styles.operationTitle}>🗑️ Dzēst lidojumu</Text>
+          
+          <View style={styles.dropdownContainer}>
+            <Text style={styles.dropdownLabel}>Izvēlieties lidojumu:</Text>
+            <ScrollView style={styles.dropdown} nestedScrollEnabled={true}>
+              {flights.map(flight => (
+                <TouchableOpacity
+                  key={flight.id}
+                  style={[
+                    styles.dropdownItem,
+                    selectedFlightId === flight.id && styles.selectedItem
+                  ]}
+                  onPress={() => setSelectedFlightId(flight.id)}
+                >
+                  <Text style={styles.flightInfo}>
+                    <Text style={styles.flightNumber}>{flight.flight_number}</Text>
+                    {' | '}{flight.status}{' | ID: '}{flight.id}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          </View>
+
+          {selectedFlightId && (
+            <TouchableOpacity style={styles.deleteConfirmButton} onPress={handleDelete}>
+              <Text style={styles.deleteButtonText}>Dzēst lidojumu</Text>
+            </TouchableOpacity>
+          )}
+        </View>
+      )}
+
+      {/* UPDATE operācija */}
+      {selectedOperation === 'update' && (
+        <View style={styles.operationContainer}>
+          <Text style={styles.operationTitle}>✏️ Rediģēt lidojumu</Text>
+          
+          <View style={styles.dropdownContainer}>
+            <Text style={styles.dropdownLabel}>Izvēlieties lidojumu:</Text>
+            <ScrollView style={styles.dropdown} nestedScrollEnabled={true}>
+              {flights.map(flight => (
+                <TouchableOpacity
+                  key={flight.id}
+                  style={[
+                    styles.dropdownItem,
+                    selectedFlightId === flight.id && styles.selectedItem
+                  ]}
+                  onPress={() => setSelectedFlightId(flight.id)}
+                >
+                  <Text style={styles.flightInfo}>
+                    <Text style={styles.flightNumber}>{flight.flight_number}</Text>
+                    {' | '}{flight.status}{' | ID: '}{flight.id}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          </View>
+
+          {selectedFlightId && (
+            <FlightForm
+              flight={getSelectedFlight()}
+              airlines={airlines}
+              routes={routes}
+              aircrafts={aircrafts}
+              airports={airports}
+              onSubmit={handleUpdate}
+              onCancel={() => {
+                setSelectedOperation(null);
+                setSelectedFlightId(null);
+              }}
+            />
+          )}
+        </View>
+      )}
+
+      {/* CREATE operācija */}
+      {selectedOperation === 'create' && (
+        <View style={styles.operationContainer}>
+          <Text style={styles.operationTitle}>➕ Pievienot jaunu lidojumu</Text>
+          <FlightForm
+            airlines={airlines}
+            routes={routes}
+            aircrafts={aircrafts}
+            airports={airports}
+            onSubmit={handleCreate}
+            onCancel={() => setSelectedOperation(null)}
+          />
+        </View>
+      )}
+
+      {/* Lidojumu saraksts */}
+      <View style={styles.flightList}>
+        <Text style={styles.sectionTitle}>📋 Pieejamie lidojumi ({flights.length})</Text>
+        {flights.slice(0, 10).map(flight => {
+          const route = routes.find(r => r.id === flight.route);
+          const airline = airlines.find(a => a.id === flight.airline);
+          
+          return (
+            <View key={flight.id} style={styles.flightItem}>
+              <Text style={styles.flightNumber}>
+                {airline?.name || 'Unknown'} {flight.flight_number}
+              </Text>
+              {route && (
+                <>
+                  <Text>
+                    🛫 {route.departure_airport_details?.city || 'Unknown'} → 
+                    🛬 {route.arrival_airport_details?.city || 'Unknown'}
+                  </Text>
+                  <Text>
+                    Izlido: {new Date(flight.departure_time).toLocaleString('lv-LV')}
+                  </Text>
+                  <Text>
+                    Ielido: {new Date(flight.arrival_time).toLocaleString('lv-LV')}
+                  </Text>
+                </>
+              )}
+              <Text>Statuss: {flight.status}</Text>
+            </View>
+          );
+        })}
+        {flights.length > 10 && (
+          <Text style={styles.moreText}>... un vēl {flights.length - 10} lidojumi</Text>
+        )}
+      </View>
+    </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
-  titleContainer: {
-    flexDirection: 'row',
+  container: {
+    flex: 1,
+    padding: 16,
+    backgroundColor: '#f5f5f5',
+  },
+  center: {
+    flex: 1,
+    justifyContent: 'center',
     alignItems: 'center',
+    gap: 10,
+  },
+  title: {
+    fontSize: 28,
+    fontWeight: 'bold',
+    textAlign: 'center',
+    marginBottom: 20,
+    color: '#2c3e50',
+  },
+  operationSection: {
+    backgroundColor: 'white',
+    padding: 20,
+    borderRadius: 12,
+    marginBottom: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  sectionTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    marginBottom: 16,
+    color: '#2c3e50',
+  },
+  buttonRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
     gap: 8,
   },
-  stepContainer: {
-    gap: 8,
+  operationButton: {
+    flex: 1,
+    padding: 15,
+    backgroundColor: '#e9ecef',
+    borderRadius: 8,
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: 'transparent',
+  },
+  activeButton: {
+    backgroundColor: '#007bff',
+    borderColor: '#0056b3',
+  },
+  buttonText: {
+    fontWeight: '600',
+    color: '#6c757d',
+  },
+  activeButtonText: {
+    color: 'white',
+  },
+  operationContainer: {
+    backgroundColor: 'white',
+    padding: 20,
+    borderRadius: 12,
+    marginBottom: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  operationTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    marginBottom: 16,
+    color: '#2c3e50',
+  },
+  dropdownContainer: {
+    marginBottom: 16,
+  },
+  dropdownLabel: {
+    fontSize: 16,
+    fontWeight: '500',
+    marginBottom: 8,
+    color: '#495057',
+  },
+  dropdown: {
+    maxHeight: 200,
+    borderWidth: 1,
+    borderColor: '#ddd',
+    borderRadius: 8,
+    backgroundColor: 'white',
+  },
+  dropdownItem: {
+    padding: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#eee',
+  },
+  selectedItem: {
+    backgroundColor: '#007bff20',
+    borderLeftWidth: 4,
+    borderLeftColor: '#007bff',
+  },
+  flightInfo: {
+    fontSize: 14,
+  },
+  flightNumber: {
+    fontWeight: 'bold',
+    color: '#007bff',
+  },
+  deleteConfirmButton: {
+    backgroundColor: '#dc3545',
+    padding: 16,
+    borderRadius: 8,
+    alignItems: 'center',
+    marginTop: 8,
+  },
+  deleteButtonText: {
+    color: 'white',
+    fontWeight: 'bold',
+    fontSize: 16,
+  },
+  flightList: {
+    backgroundColor: 'white',
+    padding: 20,
+    borderRadius: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  flightItem: {
+    padding: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#eee',
+    backgroundColor: '#f8f9fa',
+    borderRadius: 8,
     marginBottom: 8,
   },
-  reactLogo: {
-    height: 178,
-    width: 290,
-    bottom: 0,
-    left: 0,
-    position: 'absolute',
+  moreText: {
+    textAlign: 'center',
+    fontStyle: 'italic',
+    color: '#6c757d',
+    marginTop: 8,
   },
 });
